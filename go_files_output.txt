@@ -1,0 +1,312 @@
+/databases/db_interface.go
+
+```go
+package databases
+
+// DBHandler defines the common operations that any database implementation
+// must provide. By using this interface the CLI can work with MySQL, MariaDB,
+// or any future database types without needing to know their concrete
+// implementations.
+//
+// The methods return an error to allow callers to handle failures gracefully.
+type DBHandler interface {
+	// Create creates a new database with the given name.
+	Create(name string) error
+
+	// Remove deletes the named database.
+	Remove(name string) error
+}
+```
+
+/databases/maria_db.go
+
+```go
+package databases
+
+import "fmt"
+
+// MariaDB implements the DBHandler interface for MariaDB databases.
+type MariaDB struct {
+	// You can add fields such as connection parameters here.
+	// For this simple example we only keep a name for demonstration.
+	Name string
+}
+
+// Ensure MariaDB satisfies the DBHandler interface.
+var _ DBHandler = MariaDB{}
+
+// Create creates a new MariaDB database. In a real implementation this would
+// run the appropriate command. Here we just print a message.
+func (m MariaDB) Create(name string) error {
+	fmt.Printf("Creating MariaDB database: %s\n", name)
+	return nil
+}
+
+// Remove deletes an existing MariaDB database. In a real implementation this would
+// run the appropriate command. Here we just print a message.
+func (m MariaDB) Remove(name string) error {
+	fmt.Printf("Removing MariaDB database: %s\n", name)
+	return nil
+}
+```
+
+/databases/my_sql.go
+
+```go
+package databases
+
+import "fmt"
+
+// MySQL implements the DBHandler interface for MySQL databases.
+type MySQL struct {
+	// You can add fields such as connection parameters here.
+	// For this simple example we only keep a name for demonstration.
+	Name string
+}
+
+// Ensure MySQL satisfies the DBHandler interface.
+var _ DBHandler = MySQL{}
+
+// Create creates a new MySQL database. In a real implementation this would
+// run the appropriate command (e.g., `mysqladmin create`). Here we just
+// print a message.
+func (m MySQL) Create(name string) error {
+	fmt.Printf("Creating MySQL database: %s\n", name)
+	return nil
+}
+
+// Remove deletes an existing MySQL database. A real implementation would
+// execute a command such as `mysqladmin drop`.
+func (m MySQL) Remove(name string) error {
+	fmt.Printf("Removing MySQL database: %s\n", name)
+	return nil
+}
+```
+
+/formFlow/create.go
+
+```go
+package formflow
+
+import (
+	"docker-db-management/databases"
+	"log"
+
+	"github.com/charmbracelet/huh"
+)
+
+var (
+	latestVersionEntity = ActionSelection{
+		FormValues: FormValues{
+			Title:  "What would you like to do?",
+			Choice: false,
+		},
+	}
+
+	databasesEntity = DatabaseSelection{
+		Databases: []NameValue{
+			{Key: "MySQL", Value: "mysql"},
+			{Key: "MariaDB", Value: "mariadb"},
+		},
+		FormValues: FormValues{
+			Title:  "Which database do you choose?",
+			Choice: "",
+		},
+	}
+)
+
+func Create(*databases.DBHandler) {
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(actionsEntity.FormValues.Title).
+				Options(actionOptions...).
+				Value(&actionsEntity.FormValues.Choice),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+// latest version yes/no
+// root password (if blank than defaul 12345678)
+// database name (if blank no database will be created)
+
+// later
+// database user (if blank than defaul root)
+// database password (if blank than defaul 12345678)
+// database port (if blank than defaul 3306)
+// database host (if blank than defaul localhost)
+
+// create database
+// create user
+// create password
+// create database
+```
+
+/formFlow/list.go
+
+```go
+package formflow
+
+func list() {
+
+}
+```
+
+/formFlow/remove.go
+
+```go
+package formflow
+
+import "docker-db-management/databases"
+
+func Remove(*databases.DBHandler) {
+
+}
+```
+
+/main.go
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"docker-db-management/databases"
+	formflow "docker-db-management/formFlow"
+
+	"github.com/charmbracelet/huh"
+)
+
+var (
+	actionsEntity = ActionSelection{
+		Actions: []NameValue{
+			{Key: "Create database", Value: "create"},
+			{Key: "Remove database", Value: "remove"},
+		},
+		FormValues: FormValues{
+			Title:  "What would you like to do?",
+			Choice: "",
+		},
+	}
+
+	databasesEntity = DatabaseSelection{
+		Databases: []NameValue{
+			{Key: "MySQL", Value: "mysql"},
+			{Key: "MariaDB", Value: "mariadb"},
+		},
+		FormValues: FormValues{
+			Title:  "Which database do you choose?",
+			Choice: "",
+		},
+	}
+)
+
+func main() {
+	// Create options for the action select
+	var actionOptions []huh.Option[string]
+	for _, a := range actionsEntity.Actions {
+		actionOptions = append(actionOptions, huh.NewOption(a.Key, a.Value))
+	}
+
+	// Create options for the database select
+	var dbOptions []huh.Option[string]
+	for _, db := range databasesEntity.Databases {
+		dbOptions = append(dbOptions, huh.NewOption(db.Key, db.Value))
+	}
+
+	// Create a new form
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(actionsEntity.FormValues.Title).
+				Options(actionOptions...).
+				Value(&actionsEntity.FormValues.Choice),
+		),
+	)
+
+	err := form.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(actionsEntity.FormValues.Title, actionsEntity.FormValues.Choice)
+
+	form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Which database do you choose?").
+				Options(dbOptions...).
+				Value(&databasesEntity.FormValues.Choice),
+		),
+	)
+
+	err = form.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(databasesEntity.FormValues.Title, databasesEntity.FormValues.Choice)
+
+	// Create the appropriate database handler based on user selection
+	var dbHandler databases.DBHandler
+	switch databasesEntity.FormValues.Choice {
+	case "mysql":
+		dbHandler = databases.MySQL{}
+	case "mariadb":
+		dbHandler = databases.MariaDB{}
+	default:
+		log.Fatal("Unsupported database type")
+	}
+
+	// Execute the selected action
+	switch actionsEntity.FormValues.Choice {
+	case "create":
+		formflow.Create(&dbHandler)
+	case "remove":
+		formflow.Remove(&dbHandler)
+	default:
+		log.Fatal("Unsupported action")
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Printf("Successfully executed %s on %s database named %s\n", action, database, dbName)
+}
+```
+
+/types/types.go
+
+```go
+package types
+
+type NameValue struct {
+	Key   string
+	Value string
+}
+
+type ActionSelection struct {
+	Actions    []NameValue
+	FormValues FormValues
+}
+
+type DatabaseSelection struct {
+	Databases  []NameValue
+	FormValues FormValues
+}
+
+type FormValues struct {
+	Title  string
+	Choice string
+}
+```
+
