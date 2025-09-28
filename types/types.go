@@ -6,35 +6,38 @@ type NameValue struct {
 }
 
 type ActionSelection struct {
-	Actions    []NameValue
-	FormValues FormValues
+	Actions []NameValue
+	Form    FormValues[string] // or StringForm
 }
 
 type DatabaseSelection struct {
-	Databases  []NameValue
-	FormValues FormValues
+	Databases []NameValue
+	Form      FormValues[string]
+}
+
+type StringEntity struct {
+	Entity []NameValue
+	Form   FormValues[string]
 }
 
 type LatestVersion struct {
-	LatestVersion bool
+	Labels []NameValue
+	Form   FormValues[bool]
 }
 
-type FormValues struct {
-	Title  string
-	Choice string
+type FormValues[T any] struct {
+	Title       string
+	Description string
+	Choice      T
 }
 
-type FormValuesBool struct {
-	Title  string
-	Choice bool
-}
+type StringForm = FormValues[string]
+type BoolForm = FormValues[bool]
+type IntForm = FormValues[int]
+type StringsForm = FormValues[[]string]
 
-type FormValuesInt struct {
-	Title  string
-	Choice int
-}
-
-type FormValuesStrings struct {
-	Title   string
-	Choices []string
+type Config struct {
+	LatestImage  bool
+	Password     string
+	DatabaseName string
 }

@@ -3,17 +3,11 @@
 ```go
 package databases
 
-// DBHandler defines the common operations that any database implementation
-// must provide. By using this interface the CLI can work with MySQL, MariaDB,
-// or any future database types without needing to know their concrete
-// implementations.
-//
-// The methods return an error to allow callers to handle failures gracefully.
-type DBHandler interface {
-	// Create creates a new database with the given name.
-	Create(name string) error
+import "docker-db-management/types"
 
-	// Remove deletes the named database.
+type DBHandler interface {
+	SetConfig(config types.Config) error
+	Create() error
 	Remove(name string) error
 }
 ```
@@ -23,27 +17,28 @@ type DBHandler interface {
 ```go
 package databases
 
-import "fmt"
+import (
+	"docker-db-management/types"
+	"fmt"
+)
 
-// MariaDB implements the DBHandler interface for MariaDB databases.
 type MariaDB struct {
-	// You can add fields such as connection parameters here.
-	// For this simple example we only keep a name for demonstration.
-	Name string
+	LatestImage  string
+	Password     string
+	DatabaseName string
 }
 
-// Ensure MariaDB satisfies the DBHandler interface.
-var _ DBHandler = MariaDB{}
+var _ DBHandler = &MariaDB{}
 
-// Create creates a new MariaDB database. In a real implementation this would
-// run the appropriate command. Here we just print a message.
-func (m MariaDB) Create(name string) error {
-	fmt.Printf("Creating MariaDB database: %s\n", name)
+func (m *MariaDB) SetConfig(config types.Config) error {
 	return nil
 }
 
-// Remove deletes an existing MariaDB database. In a real implementation this would
-// run the appropriate command. Here we just print a message.
+func (m MariaDB) Create() error {
+	fmt.Printf("Creating MariaDB database: %s\n", m.DatabaseName)
+	return nil
+}
+
 func (m MariaDB) Remove(name string) error {
 	fmt.Printf("Removing MariaDB database: %s\n", name)
 	return nil
@@ -55,28 +50,31 @@ func (m MariaDB) Remove(name string) error {
 ```go
 package databases
 
-import "fmt"
+import (
+	"docker-db-management/types"
+	"fmt"
+)
 
-// MySQL implements the DBHandler interface for MySQL databases.
 type MySQL struct {
-	// You can add fields such as connection parameters here.
-	// For this simple example we only keep a name for demonstration.
-	Name string
+	LatestImage  bool
+	Password     string
+	DatabaseName string
 }
 
-// Ensure MySQL satisfies the DBHandler interface.
-var _ DBHandler = MySQL{}
+var _ DBHandler = &MySQL{}
 
-// Create creates a new MySQL database. In a real implementation this would
-// run the appropriate command (e.g., `mysqladmin create`). Here we just
-// print a message.
-func (m MySQL) Create(name string) error {
-	fmt.Printf("Creating MySQL database: %s\n", name)
+func (m *MySQL) SetConfig(config types.Config) error {
+	m.LatestImage = config.LatestImage
+	m.Password = config.Password
+	m.DatabaseName = config.DatabaseName
 	return nil
 }
 
-// Remove deletes an existing MySQL database. A real implementation would
-// execute a command such as `mysqladmin drop`.
+func (m MySQL) Create() error {
+	fmt.Printf("Creating MySQL database: %s\n", m.DatabaseName)
+	return nil
+}
+
 func (m MySQL) Remove(name string) error {
 	fmt.Printf("Removing MySQL database: %s\n", name)
 	return nil
@@ -90,38 +88,62 @@ package formflow
 
 import (
 	"docker-db-management/databases"
+	"docker-db-management/types"
+	"fmt"
 	"log"
 
 	"github.com/charmbracelet/huh"
+	"github.com/fatih/color"
 )
 
 var (
-	latestVersionEntity = ActionSelection{
-		FormValues: FormValues{
-			Title:  "What would you like to do?",
-			Choice: false,
+	latestVersionEntity = types.LatestVersion{
+		Form: types.FormValues[bool]{
+			Title:       "Pull the latest image?",
+			Description: "If you don't have an image, it will still be pulled.",
+			Choice:      false,
 		},
 	}
 
-	databasesEntity = DatabaseSelection{
-		Databases: []NameValue{
-			{Key: "MySQL", Value: "mysql"},
-			{Key: "MariaDB", Value: "mariadb"},
-		},
-		FormValues: FormValues{
-			Title:  "Which database do you choose?",
-			Choice: "",
+	passwordEntity = types.StringEntity{
+		Form: types.FormValues[string]{
+			Title:       "Set a root password for the database?",
+			Description: "If you don't set a password, it will be set to 12345678.",
+			Choice:      "",
 		},
 	}
+
+	databaseNameEntity = types.StringEntity{
+		Form: types.FormValues[string]{
+			Title:       "Create a database?",
+			Description: "You can leave this blank if you don't want to create a database.",
+			Choice:      "",
+		},
+	}
+
+	// databasePortEntity = types.IntEntity{
+	// 	Form: types.FormValues[int]{
+	// 		Title:       "Set a database port?",
+	// 		Description: "If you don't set a database port, it will be set to 3306.",
+	// 		Choice:      3306,
+	// 	},
+	// }
+
 )
 
-func Create(*databases.DBHandler) {
+func Create(dbHandler databases.DBHandler) {
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+	blue := color.New(color.FgBlue).SprintFunc()
+
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title(actionsEntity.FormValues.Title).
-				Options(actionOptions...).
-				Value(&actionsEntity.FormValues.Choice),
+			huh.NewConfirm().
+				Title(latestVersionEntity.Form.Title).
+				Description(latestVersionEntity.Form.Description).
+				Affirmative("Yes").
+				Negative("No.").
+				Value(&latestVersionEntity.Form.Choice),
 		),
 	)
 
@@ -130,6 +152,53 @@ func Create(*databases.DBHandler) {
 		log.Fatal(err)
 	}
 
+	symbol := red("✗ ")
+	if latestVersionEntity.Form.Choice {
+		symbol = green("✓ ")
+	}
+	fmt.Println(symbol, latestVersionEntity.Form.Title)
+
+	form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title(passwordEntity.Form.Title).
+				Description(passwordEntity.Form.Description).
+				Value(&passwordEntity.Form.Choice),
+		),
+	)
+
+	err = form.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if passwordEntity.Form.Choice == "" {
+		passwordEntity.Form.Choice = "12345678"
+	}
+	fmt.Println(green("✓ "), passwordEntity.Form.Title, blue(passwordEntity.Form.Choice))
+
+	form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title(databaseNameEntity.Form.Title).
+				Description(databaseNameEntity.Form.Description).
+				Value(&databaseNameEntity.Form.Choice),
+		),
+	)
+
+	err = form.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(green("✓ "), databaseNameEntity.Form.Title, blue(databaseNameEntity.Form.Choice))
+
+	dbHandler.SetConfig(types.Config{
+		LatestImage:  latestVersionEntity.Form.Choice,
+		Password:     passwordEntity.Form.Choice,
+		DatabaseName: databaseNameEntity.Form.Choice,
+	})
+	dbHandler.Create()
 }
 
 // latest version yes/no
@@ -165,7 +234,7 @@ package formflow
 
 import "docker-db-management/databases"
 
-func Remove(*databases.DBHandler) {
+func Remove(databases.DBHandler) {
 
 }
 ```
@@ -181,28 +250,30 @@ import (
 
 	"docker-db-management/databases"
 	formflow "docker-db-management/formFlow"
+	"docker-db-management/types"
 
 	"github.com/charmbracelet/huh"
+	"github.com/fatih/color"
 )
 
 var (
-	actionsEntity = ActionSelection{
-		Actions: []NameValue{
+	actionsEntity = types.ActionSelection{
+		Actions: []types.NameValue{
 			{Key: "Create database", Value: "create"},
 			{Key: "Remove database", Value: "remove"},
 		},
-		FormValues: FormValues{
+		Form: types.FormValues[string]{
 			Title:  "What would you like to do?",
 			Choice: "",
 		},
 	}
 
-	databasesEntity = DatabaseSelection{
-		Databases: []NameValue{
+	databasesEntity = types.DatabaseSelection{
+		Databases: []types.NameValue{
 			{Key: "MySQL", Value: "mysql"},
 			{Key: "MariaDB", Value: "mariadb"},
 		},
-		FormValues: FormValues{
+		Form: types.FormValues[string]{
 			Title:  "Which database do you choose?",
 			Choice: "",
 		},
@@ -210,25 +281,26 @@ var (
 )
 
 func main() {
-	// Create options for the action select
+	fmt.Println("")
+	green := color.New(color.FgGreen).SprintFunc()
+	blue := color.New(color.FgBlue).SprintFunc()
+
 	var actionOptions []huh.Option[string]
 	for _, a := range actionsEntity.Actions {
 		actionOptions = append(actionOptions, huh.NewOption(a.Key, a.Value))
 	}
 
-	// Create options for the database select
 	var dbOptions []huh.Option[string]
 	for _, db := range databasesEntity.Databases {
 		dbOptions = append(dbOptions, huh.NewOption(db.Key, db.Value))
 	}
 
-	// Create a new form
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title(actionsEntity.FormValues.Title).
+				Title(actionsEntity.Form.Title).
 				Options(actionOptions...).
-				Value(&actionsEntity.FormValues.Choice),
+				Value(&actionsEntity.Form.Choice),
 		),
 	)
 
@@ -237,14 +309,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(actionsEntity.FormValues.Title, actionsEntity.FormValues.Choice)
+	fmt.Println(green("✓ "), actionsEntity.Form.Title, blue(actionsEntity.Form.Choice))
 
 	form = huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Which database do you choose?").
 				Options(dbOptions...).
-				Value(&databasesEntity.FormValues.Choice),
+				Value(&databasesEntity.Form.Choice),
 		),
 	)
 
@@ -253,25 +325,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(databasesEntity.FormValues.Title, databasesEntity.FormValues.Choice)
+	fmt.Println(green("✓ "), databasesEntity.Form.Title, blue(databasesEntity.Form.Choice))
 
-	// Create the appropriate database handler based on user selection
 	var dbHandler databases.DBHandler
-	switch databasesEntity.FormValues.Choice {
+	switch databasesEntity.Form.Choice {
 	case "mysql":
-		dbHandler = databases.MySQL{}
+		dbHandler = &databases.MySQL{}
 	case "mariadb":
-		dbHandler = databases.MariaDB{}
+		dbHandler = &databases.MariaDB{}
 	default:
 		log.Fatal("Unsupported database type")
 	}
 
-	// Execute the selected action
-	switch actionsEntity.FormValues.Choice {
+	switch actionsEntity.Form.Choice {
 	case "create":
-		formflow.Create(&dbHandler)
+		formflow.Create(dbHandler)
 	case "remove":
-		formflow.Remove(&dbHandler)
+		formflow.Remove(dbHandler)
 	default:
 		log.Fatal("Unsupported action")
 	}
@@ -295,18 +365,40 @@ type NameValue struct {
 }
 
 type ActionSelection struct {
-	Actions    []NameValue
-	FormValues FormValues
+	Actions []NameValue
+	Form    FormValues[string] // or StringForm
 }
 
 type DatabaseSelection struct {
-	Databases  []NameValue
-	FormValues FormValues
+	Databases []NameValue
+	Form      FormValues[string]
 }
 
-type FormValues struct {
-	Title  string
-	Choice string
+type StringEntity struct {
+	Entity []NameValue
+	Form   FormValues[string]
+}
+
+type LatestVersion struct {
+	Labels []NameValue
+	Form   FormValues[bool]
+}
+
+type FormValues[T any] struct {
+	Title       string
+	Description string
+	Choice      T
+}
+
+type StringForm = FormValues[string]
+type BoolForm = FormValues[bool]
+type IntForm = FormValues[int]
+type StringsForm = FormValues[[]string]
+
+type Config struct {
+	LatestImage  bool
+	Password     string
+	DatabaseName string
 }
 ```
 

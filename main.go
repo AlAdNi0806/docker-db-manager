@@ -9,6 +9,7 @@ import (
 	"docker-db-management/types"
 
 	"github.com/charmbracelet/huh"
+	"github.com/fatih/color"
 )
 
 var (
@@ -17,7 +18,7 @@ var (
 			{Key: "Create database", Value: "create"},
 			{Key: "Remove database", Value: "remove"},
 		},
-		FormValues: types.FormValues{
+		Form: types.FormValues[string]{
 			Title:  "What would you like to do?",
 			Choice: "",
 		},
@@ -28,14 +29,23 @@ var (
 			{Key: "MySQL", Value: "mysql"},
 			{Key: "MariaDB", Value: "mariadb"},
 		},
-		FormValues: types.FormValues{
+		Form: types.FormValues[string]{
 			Title:  "Which database do you choose?",
 			Choice: "",
 		},
 	}
 )
 
-func main() {
+func main_() {
+	// mysql := databases.DBHandler(&databases.MySQL{})
+	// mysql.Create()
+
+	// os.Exit(1)
+
+	fmt.Println("")
+	green := color.New(color.FgGreen).SprintFunc()
+	blue := color.New(color.FgBlue).SprintFunc()
+
 	var actionOptions []huh.Option[string]
 	for _, a := range actionsEntity.Actions {
 		actionOptions = append(actionOptions, huh.NewOption(a.Key, a.Value))
@@ -49,9 +59,9 @@ func main() {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title(actionsEntity.FormValues.Title).
+				Title(actionsEntity.Form.Title).
 				Options(actionOptions...).
-				Value(&actionsEntity.FormValues.Choice),
+				Value(&actionsEntity.Form.Choice),
 		),
 	)
 
@@ -60,14 +70,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(actionsEntity.FormValues.Title, actionsEntity.FormValues.Choice)
+	fmt.Println(green("✓ "), actionsEntity.Form.Title, blue(actionsEntity.Form.Choice))
 
 	form = huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Which database do you choose?").
 				Options(dbOptions...).
-				Value(&databasesEntity.FormValues.Choice),
+				Value(&databasesEntity.Form.Choice),
 		),
 	)
 
@@ -76,23 +86,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(databasesEntity.FormValues.Title, databasesEntity.FormValues.Choice)
+	fmt.Println(green("✓ "), databasesEntity.Form.Title, blue(databasesEntity.Form.Choice))
 
 	var dbHandler databases.DBHandler
-	switch databasesEntity.FormValues.Choice {
+	switch databasesEntity.Form.Choice {
 	case "mysql":
-		dbHandler = databases.MySQL{}
+		dbHandler = &databases.MySQL{}
 	case "mariadb":
-		dbHandler = databases.MariaDB{}
+		dbHandler = &databases.MariaDB{}
 	default:
 		log.Fatal("Unsupported database type")
 	}
 
-	switch actionsEntity.FormValues.Choice {
+	switch actionsEntity.Form.Choice {
 	case "create":
-		formflow.Create(&dbHandler)
+		formflow.Create(dbHandler)
 	case "remove":
-		formflow.Remove(&dbHandler)
+		formflow.Remove(dbHandler)
 	default:
 		log.Fatal("Unsupported action")
 	}
