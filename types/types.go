@@ -1,40 +1,43 @@
 package types
 
-type NameValue struct {
-	Key   string
+import "docker-db-management/form"
+
+type LabelValue struct {
+	Label string
 	Value string
 }
 
-type ActionSelection struct {
-	Actions []NameValue
-	Form    FormValues[string] // or StringForm
+type ActionEntity struct {
+	Actions []form.SelectOption
+	Form    FormValues[form.SelectOption]
 }
 
-type DatabaseSelection struct {
-	Databases []NameValue
-	Form      FormValues[string]
+type DatabaseEntity struct {
+	Databases []form.SelectOption
+	Form      FormValues[form.SelectOption]
 }
 
 type StringEntity struct {
-	Entity []NameValue
+	Entity []LabelValue
 	Form   FormValues[string]
 }
 
-type LatestVersion struct {
-	Labels []NameValue
+type LatestVersionEntity struct {
+	Labels []LabelValue
 	Form   FormValues[bool]
 }
 
 type FormValues[T any] struct {
-	Title       string
+	Question    string
 	Description string
 	Choice      T
 }
 
-type StringForm = FormValues[string]
+type SelectOptionForm = FormValues[form.SelectOption]
 type BoolForm = FormValues[bool]
-type IntForm = FormValues[int]
 type StringsForm = FormValues[[]string]
+type StringForm = FormValues[string]
+type IntForm = FormValues[int]
 
 type Config struct {
 	LatestImage  bool

@@ -3,35 +3,38 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"docker-db-management/databases"
+	"docker-db-management/form"
 	formflow "docker-db-management/formFlow"
 	"docker-db-management/types"
 
-	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
 )
 
 var (
-	actionsEntity = types.ActionSelection{
-		Actions: []types.NameValue{
-			{Key: "Create database", Value: "create"},
-			{Key: "Remove database", Value: "remove"},
+	actionsEntity = types.ActionEntity{
+		Actions: []form.SelectOption{
+			{Label: "Remove database", Value: "remove"},
+			{Label: "Create database", Value: "create"},
+			{Label: "Manage db containers/image/volumes", Value: "list"},
 		},
-		Form: types.FormValues[string]{
-			Title:  "What would you like to do?",
-			Choice: "",
+		Form: types.FormValues[form.SelectOption]{
+			Question:    "What would you like to do?",
+			Description: "wassup",
 		},
 	}
 
-	databasesEntity = types.DatabaseSelection{
-		Databases: []types.NameValue{
-			{Key: "MySQL", Value: "mysql"},
-			{Key: "MariaDB", Value: "mariadb"},
+	databasesEntity = types.DatabaseEntity{
+		Databases: []form.SelectOption{
+			{Label: "MySQL", Value: "mysql"},
+			{Label: "MariaDB", Value: "mariadb"},
 		},
-		Form: types.FormValues[string]{
-			Title:  "Which database do you choose?",
-			Choice: "",
+		Form: types.FormValues[form.SelectOption]{
+			Question: "Which database do you choose?",
 		},
 	}
 )
@@ -41,55 +44,47 @@ func main_() {
 	// mysql.Create()
 
 	// os.Exit(1)
+	//
+	form.PrintFullWidthBox("rami")
 
-	fmt.Println("")
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		form.Cleanup()
+		os.Exit(1)
+	}()
+
+	// Hide cursor once at start
+	fmt.Print("\033[?25l")
+	defer fmt.Print("\033[?25h")
+
+	// Switch TO alternate screen
+	fmt.Print("\033[?1049h")
+	defer fmt.Print("\033[?1049l")
+
 	green := color.New(color.FgGreen).SprintFunc()
 	blue := color.New(color.FgBlue).SprintFunc()
 
-	var actionOptions []huh.Option[string]
-	for _, a := range actionsEntity.Actions {
-		actionOptions = append(actionOptions, huh.NewOption(a.Key, a.Value))
-	}
+	actionsEntity.Form.Choice, _ = form.NewSelect(form.SelectPrompt{
+		Question:    actionsEntity.Form.Question,
+		Description: actionsEntity.Form.Description,
+		Options:     actionsEntity.Actions,
+	})
 
-	var dbOptions []huh.Option[string]
-	for _, db := range databasesEntity.Databases {
-		dbOptions = append(dbOptions, huh.NewOption(db.Key, db.Value))
-	}
+	fmt.Println("")
+	fmt.Println(green("✓ "), actionsEntity.Form.Question, blue(actionsEntity.Form.Choice.Label))
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title(actionsEntity.Form.Title).
-				Options(actionOptions...).
-				Value(&actionsEntity.Form.Choice),
-		),
-	)
+	databasesEntity.Form.Choice, _ = form.NewSelect(form.SelectPrompt{
+		Question:    databasesEntity.Form.Question,
+		Description: databasesEntity.Form.Description,
+		Options:     databasesEntity.Databases,
+	})
 
-	err := form.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(green("✓ "), actionsEntity.Form.Title, blue(actionsEntity.Form.Choice))
-
-	form = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Which database do you choose?").
-				Options(dbOptions...).
-				Value(&databasesEntity.Form.Choice),
-		),
-	)
-
-	err = form.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(green("✓ "), databasesEntity.Form.Title, blue(databasesEntity.Form.Choice))
+	fmt.Println(green("✓ "), databasesEntity.Form.Question, blue(databasesEntity.Form.Choice.Label))
 
 	var dbHandler databases.DBHandler
-	switch databasesEntity.Form.Choice {
+	switch databasesEntity.Form.Choice.Value {
 	case "mysql":
 		dbHandler = &databases.MySQL{}
 	case "mariadb":
@@ -98,17 +93,13 @@ func main_() {
 		log.Fatal("Unsupported database type")
 	}
 
-	switch actionsEntity.Form.Choice {
+	switch actionsEntity.Form.Choice.Value {
 	case "create":
 		formflow.Create(dbHandler)
 	case "remove":
 		formflow.Remove(dbHandler)
 	default:
 		log.Fatal("Unsupported action")
-	}
-
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	// fmt.Printf("Successfully executed %s on %s database named %s\n", action, database, dbName)

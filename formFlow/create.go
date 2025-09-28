@@ -2,18 +2,17 @@ package formflow
 
 import (
 	"docker-db-management/databases"
+	"docker-db-management/form"
 	"docker-db-management/types"
 	"fmt"
-	"log"
 
-	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
 )
 
 var (
-	latestVersionEntity = types.LatestVersion{
+	latestVersionEntity = types.LatestVersionEntity{
 		Form: types.FormValues[bool]{
-			Title:       "Pull the latest image?",
+			Question:    "Pull the latest image?",
 			Description: "If you don't have an image, it will still be pulled.",
 			Choice:      false,
 		},
@@ -21,7 +20,7 @@ var (
 
 	passwordEntity = types.StringEntity{
 		Form: types.FormValues[string]{
-			Title:       "Set a root password for the database?",
+			Question:    "Set a root password for the database?",
 			Description: "If you don't set a password, it will be set to 12345678.",
 			Choice:      "",
 		},
@@ -29,20 +28,11 @@ var (
 
 	databaseNameEntity = types.StringEntity{
 		Form: types.FormValues[string]{
-			Title:       "Create a database?",
+			Question:    "Create a database?",
 			Description: "You can leave this blank if you don't want to create a database.",
 			Choice:      "",
 		},
 	}
-
-	// databasePortEntity = types.IntEntity{
-	// 	Form: types.FormValues[int]{
-	// 		Title:       "Set a database port?",
-	// 		Description: "If you don't set a database port, it will be set to 3306.",
-	// 		Choice:      3306,
-	// 	},
-	// }
-
 )
 
 func Create(dbHandler databases.DBHandler) {
@@ -50,62 +40,36 @@ func Create(dbHandler databases.DBHandler) {
 	red := color.New(color.FgRed).SprintFunc()
 	blue := color.New(color.FgBlue).SprintFunc()
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title(latestVersionEntity.Form.Title).
-				Description(latestVersionEntity.Form.Description).
-				Affirmative("Yes").
-				Negative("No.").
-				Value(&latestVersionEntity.Form.Choice),
-		),
-	)
-
-	err := form.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
+	latestVersionEntity.Form.Choice, _ = form.NewSwitch(form.SwitchPrompt{
+		Question:     latestVersionEntity.Form.Question,
+		Description:  latestVersionEntity.Form.Description,
+		Options:      [2]string{"Yes", "No"},
+		DefaultValue: false,
+	})
 
 	symbol := red("✗ ")
 	if latestVersionEntity.Form.Choice {
 		symbol = green("✓ ")
 	}
-	fmt.Println(symbol, latestVersionEntity.Form.Title)
+	fmt.Println(symbol, latestVersionEntity.Form.Question)
 
-	form = huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title(passwordEntity.Form.Title).
-				Description(passwordEntity.Form.Description).
-				Value(&passwordEntity.Form.Choice),
-		),
-	)
-
-	err = form.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
+	passwordEntity.Form.Choice, _ = form.NewInput(form.InputPrompt{
+		Question:    passwordEntity.Form.Question,
+		Description: passwordEntity.Form.Description,
+		Placeholder: "12345678",
+	})
 
 	if passwordEntity.Form.Choice == "" {
 		passwordEntity.Form.Choice = "12345678"
 	}
-	fmt.Println(green("✓ "), passwordEntity.Form.Title, blue(passwordEntity.Form.Choice))
+	fmt.Println(green("✓ "), passwordEntity.Form.Question, blue(passwordEntity.Form.Choice))
 
-	form = huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title(databaseNameEntity.Form.Title).
-				Description(databaseNameEntity.Form.Description).
-				Value(&databaseNameEntity.Form.Choice),
-		),
-	)
+	databaseNameEntity.Form.Choice, _ = form.NewInput(form.InputPrompt{
+		Question:    databaseNameEntity.Form.Question,
+		Description: databaseNameEntity.Form.Description,
+	})
 
-	err = form.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(green("✓ "), databaseNameEntity.Form.Title, blue(databaseNameEntity.Form.Choice))
+	fmt.Println(green("✓ "), databaseNameEntity.Form.Question, blue(databaseNameEntity.Form.Choice))
 
 	dbHandler.SetConfig(types.Config{
 		LatestImage:  latestVersionEntity.Form.Choice,
