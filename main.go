@@ -39,7 +39,7 @@ var (
 	}
 )
 
-func main_() {
+func main() {
 	// mysql := databases.DBHandler(&databases.MySQL{})
 	// mysql.Create()
 
