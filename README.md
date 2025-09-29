@@ -2,11 +2,11 @@
 
 A powerful, interactive command-line tool for managing Docker-based database containers. Built with Go, this CLI simplifies the creation, removal, and management of MySQL and MariaDB databases running in Docker containers.
 
-Screenshot of choosing an action
+### Screenshot of choosing an action
 ![Choose action](https://github.com/AlAdNi0806/docker-db-manager/blob/main/assets/action.png)
 
-Screenshot of setting a root password for the db
-![Choose action](https://github.com/AlAdNi0806/docker-db-management/blob/main/assets/root_password.png)
+### Screenshot of setting a root password for the db
+![Choose action](https://github.com/AlAdNi0806/docker-db-manager/blob/main/assets/root_password.png)
 
 ## Features
 
